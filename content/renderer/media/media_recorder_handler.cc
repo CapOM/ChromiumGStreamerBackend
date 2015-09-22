@@ -80,10 +80,14 @@ bool MediaRecorderHandler::start(int timeslice) {
   timeslice_ = TimeDelta::FromMilliseconds(timeslice);
   slice_origin_timestamp_ = TimeTicks::Now();
 
+#if !defined(MEDIA_DISABLE_LIBWEBM)
   webm_muxer_.reset(
       new media::WebmMuxer(use_vp9_ ? media::kCodecVP9 : media::kCodecVP8,
                            base::Bind(&MediaRecorderHandler::WriteData,
                                       weak_factory_.GetWeakPtr())));
+#else
+  return false;
+#endif
 
   blink::WebVector<blink::WebMediaStreamTrack> video_tracks;
   media_stream_.videoTracks(video_tracks);
@@ -149,8 +153,10 @@ void MediaRecorderHandler::OnEncodedVideo(
   DCHECK(main_render_thread_checker_.CalledOnValidThread());
   if (!webm_muxer_)
     return;
+#if !defined(MEDIA_DISABLE_LIBWEBM)
   webm_muxer_->OnEncodedVideo(video_frame, encoded_data.Pass(), timestamp,
                               is_key_frame);
+#endif
 }
 
 void MediaRecorderHandler::WriteData(base::StringPiece data) {
