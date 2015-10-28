@@ -565,7 +565,7 @@ void GpuCommandBufferStub::OnInitialize(
     if (!context.get()) {
       context = gfx::GLContext::CreateGLContext(
           channel_->share_group(),
-          channel_->gpu_channel_manager()->GetDefaultOffscreenSurface(),
+          surface_.get(),
           gpu_preference_);
       if (!context.get()) {
         DLOG(ERROR) << "Failed to create shared context for virtualization.";
