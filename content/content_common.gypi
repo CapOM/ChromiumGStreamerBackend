@@ -307,6 +307,8 @@
       'common/gpu/client/gpu_jpeg_decode_accelerator_host.h',
       'common/gpu/client/gpu_memory_buffer_impl.cc',
       'common/gpu/client/gpu_memory_buffer_impl.h',
+      'common/gpu/client/gpu_memory_buffer_impl_dmabuf_surface.cc',
+      'common/gpu/client/gpu_memory_buffer_impl_dmabuf_surface.h',
       'common/gpu/client/gpu_memory_buffer_impl_ozone_native_pixmap.cc',
       'common/gpu/client/gpu_memory_buffer_impl_ozone_native_pixmap.h',
       'common/gpu/client/gpu_memory_buffer_impl_shared_memory.cc',

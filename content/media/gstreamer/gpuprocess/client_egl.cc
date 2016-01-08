@@ -4,14 +4,20 @@
 
 #include "content/media/gstreamer/gpuprocess/client_egl.h"
 
+#include <utility>
 #include <vector>
 
 #include "base/lazy_instance.h"
 #include "content/common/gpu/client/command_buffer_proxy_impl.h"
+#include "content/common/gpu/client/gpu_memory_buffer_impl.h"
 #include "gpu/command_buffer/client/gpu_control.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/gles2_lib.h"
+#include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
+#include "ui/aura/env.h"
+#include "ui/compositor/compositor.h"
+#include "ui/gfx/gpu_memory_buffer.h"
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -63,6 +69,38 @@ bool ClientEGL_SetupCommandBufferProxy()
   return true;
 }
 
+#define FOURCC(a, b, c, d)                                        \
+  ((static_cast<uint32_t>(a)) | (static_cast<uint32_t>(b) << 8) | \
+   (static_cast<uint32_t>(c) << 16) | (static_cast<uint32_t>(d) << 24))
+
+#define DRM_FORMAT_ARGB8888 FOURCC('A', 'R', '2', '4')
+#define DRM_FORMAT_ABGR8888 FOURCC('A', 'B', '2', '4')
+#define DRM_FORMAT_XRGB8888 FOURCC('X', 'R', '2', '4')
+#define DRM_FORMAT_XBGR8888 FOURCC('X', 'B', '2', '4')
+
+static gfx::BufferFormat drmFourCCToBufferFormat(EGLint fourcc) {
+  switch (fourcc) {
+    case DRM_FORMAT_ABGR8888:
+      return gfx::BufferFormat::RGBA_8888;
+    case DRM_FORMAT_XBGR8888:
+      return gfx::BufferFormat::RGBX_8888;
+    case DRM_FORMAT_ARGB8888:
+      return gfx::BufferFormat::BGRA_8888;
+    case DRM_FORMAT_XRGB8888:
+      return gfx::BufferFormat::BGRX_8888;
+    default:
+      NOTREACHED();
+      return gfx::BufferFormat::LAST;
+  }
+
+  NOTREACHED();
+  return gfx::BufferFormat::LAST;
+}
+
+void GpuMemoryBufferDeleted(int empty, const gpu::SyncToken& sync_token) {
+  // Nothing to do.
+}
+
 EGLImageKHR CreateEGLImageKHR(EGLDisplay dpy,
                               EGLContext ctx,
                               EGLenum target,
@@ -93,21 +131,27 @@ EGLImageKHR CreateEGLImageKHR(EGLDisplay dpy,
     return EGL_NO_IMAGE_KHR;
   }
 
-  // Retrieve width, height and number of attributes.
-  GLsizei width = 0;
-  GLsizei height = 0;
-  size_t nb_attribs = 0;
-  std::vector<int32_t> dmabuf_fds;
+  EGLint width = 0;
+  EGLint height = 0;
+  EGLint nb_attribs = 0;
+  EGLint fourcc = 0;
+  EGLint offset = 0;
+  EGLint stride = 0;
+  base::ScopedFD fd;
 
   for (size_t i = 0; i < 20; ++i) {
     if (attrib_list[i] == EGL_WIDTH)
       width = attrib_list[i + 1];
     else if (attrib_list[i] == EGL_HEIGHT)
-      height = attrib_list[i + 1];
-    else if (attrib_list[i] == EGL_DMA_BUF_PLANE0_FD_EXT ||
-             attrib_list[i] == EGL_DMA_BUF_PLANE1_FD_EXT ||
-             attrib_list[i] == EGL_DMA_BUF_PLANE2_FD_EXT)
-      dmabuf_fds.push_back(attrib_list[i + 1]);
+       height = attrib_list[i + 1];
+    else if (attrib_list[i] == EGL_LINUX_DRM_FOURCC_EXT)
+       fourcc = attrib_list[i + 1];
+    else if (attrib_list[i] == EGL_DMA_BUF_PLANE0_OFFSET_EXT)
+       offset = attrib_list[i + 1];
+    else if (attrib_list[i] == EGL_DMA_BUF_PLANE0_PITCH_EXT)
+       stride = attrib_list[i + 1];
+    else if (attrib_list[i] == EGL_DMA_BUF_PLANE0_FD_EXT)
+       fd.reset(attrib_list[i + 1]);
     else if (attrib_list[i] == EGL_NONE) {
       nb_attribs = i + 1;
       break;
@@ -129,9 +173,24 @@ EGLImageKHR CreateEGLImageKHR(EGLDisplay dpy,
     return EGL_NO_IMAGE_KHR;
   }
 
-  int32_t image_id = g_thread_safe_cmd_impl.Get()->CreateEGLImage(
-      width, height,
-      std::vector<int32_t>(attrib_list, attrib_list + nb_attribs), dmabuf_fds);
+  gfx::BufferFormat format(drmFourCCToBufferFormat(fourcc));
+
+  gfx::GpuMemoryBufferHandle handle;
+  handle.type = gfx::DMABUF_SURFACE_BUFFER;
+  handle.handle = base::FileDescriptor(std::move(fd));
+  handle.offset = offset;
+  handle.stride = stride;
+
+  scoped_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer =
+      content::GpuMemoryBufferImpl::CreateFromHandle(handle, gfx::Size(width, height), format,
+      gfx::BufferUsage::SCANOUT, base::Bind(&GpuMemoryBufferDeleted, 0));
+
+  if (!gpu_memory_buffer) {
+    NOTREACHED() << "failed to rcreate gpu_memory_buffer";
+    return EGL_NO_IMAGE_KHR;
+  }
+
+  int32_t image_id = g_thread_safe_cmd_impl.Get()->CreateImage(gpu_memory_buffer->AsClientBuffer(), width, height, GL_RGBA);
 
   if (image_id < 0) {
     NOTREACHED() << "eglCreateImageKHR, image_id < 0";

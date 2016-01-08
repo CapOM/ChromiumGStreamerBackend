@@ -19,6 +19,10 @@
 #include "content/common/gpu/client/gpu_memory_buffer_impl_ozone_native_pixmap.h"
 #endif
 
+#if defined(OS_LINUX)
+#include "content/common/gpu/client/gpu_memory_buffer_impl_dmabuf_surface.h"
+#endif
+
 namespace content {
 
 GpuMemoryBufferImpl::GpuMemoryBufferImpl(gfx::GpuMemoryBufferId id,
@@ -62,6 +66,12 @@ scoped_ptr<GpuMemoryBufferImpl> GpuMemoryBufferImpl::CreateFromHandle(
       return GpuMemoryBufferImplOzoneNativePixmap::CreateFromHandle(
           handle, size, format, usage, callback);
 #endif
+#if defined(OS_LINUX)
+    case gfx::DMABUF_SURFACE_BUFFER:
+      return GpuMemoryBufferImplDmabufSurface::CreateFromHandle(
+          handle, size, format, usage, callback);
+#endif
+
     default:
       NOTREACHED();
       return nullptr;

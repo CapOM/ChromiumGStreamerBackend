@@ -53,6 +53,10 @@
 #include "ui/gl/gl_image_egl.h"
 #endif
 
+#if defined(OS_LINUX)
+#include "ui/gl/gl_image_dmabuf_surface.h"
+#endif
+
 namespace content {
 namespace {
 
@@ -1056,6 +1060,19 @@ scoped_refptr<gl::GLImage> GpuChannel::CreateImageForGpuMemoryBuffer(
 
       return image;
     }
+    case gfx::DMABUF_SURFACE_BUFFER: {
+      if (!base::IsValueInRangeForNumericType<size_t>(handle.stride))
+        return nullptr;
+      scoped_refptr<gfx::GLImageDmabufSurface> image(
+          new gfx::GLImageDmabufSurface(size, internalformat));
+      if (!image->Initialize(handle.handle, format, handle.offset,
+                           handle.stride)) {
+        return nullptr;
+      }
+
+      return image;
+    }
+
     default: {
       GpuChannelManager* manager = gpu_channel_manager();
       if (!manager->gpu_memory_buffer_factory())

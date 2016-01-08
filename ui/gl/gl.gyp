@@ -153,6 +153,12 @@
             '<(DEPTH)/third_party/khronos',
         ],
         }],
+        ['OS=="linux"', {
+          'sources': [
+            'gl_image_dmabuf_surface.cc',
+            'gl_image_dmabuf_surface.h',
+          ],
+        }],
         ['OS in ("android", "linux")', {
           'sources': [
             'gl_implementation_osmesa.cc',

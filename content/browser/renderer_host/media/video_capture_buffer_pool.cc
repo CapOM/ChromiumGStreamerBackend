@@ -234,6 +234,7 @@ bool VideoCaptureBufferPool::GpuMemoryBufferTracker::ShareToProcess2(
   const auto& current_gmb_handle = gpu_memory_buffers_[plane]->GetHandle();
   switch (current_gmb_handle.type) {
     case gfx::EMPTY_BUFFER:
+    case gfx::DMABUF_SURFACE_BUFFER:
       NOTREACHED();
       return false;
     case gfx::SHARED_MEMORY_BUFFER: {
