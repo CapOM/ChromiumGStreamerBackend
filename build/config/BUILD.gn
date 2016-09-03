@@ -259,6 +259,10 @@ config("feature_flags") {
   if (!fieldtrial_testing_like_official_build && !is_chrome_branded) {
     defines += [ "FIELDTRIAL_TESTING_ENABLED" ]
   }
+
+  if (use_gstreamer) {
+    defines += [ "USE_GSTREAMER=1" ]
+  }
 }
 
 # Debug/release ----------------------------------------------------------------
