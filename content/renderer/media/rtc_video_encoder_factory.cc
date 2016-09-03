@@ -34,10 +34,10 @@ void VEAToWebRTCCodecs(
   } else if (profile.profile >= media::H264PROFILE_MIN &&
              profile.profile <= media::H264PROFILE_MAX) {
     bool webrtc_h264_enabled = false;
-#if BUILDFLAG(RTC_USE_H264) && defined(OS_MACOSX)
+#if BUILDFLAG(RTC_USE_H264) && defined(OS_MACOSX) && !defined(MEDIA_DISABLE_FFMPEG)
     webrtc_h264_enabled =
         base::FeatureList::IsEnabled(kWebRtcH264WithOpenH264FFmpeg);
-#endif  // BUILDFLAG(RTC_USE_H264) && defined(OS_MACOSX)
+#endif  // BUILDFLAG(RTC_USE_H264) && defined(OS_MACOSX) && !defined(MEDIA_DISABLE_FFMPEG)
     if (cmd_line->HasSwitch(switches::kEnableWebRtcHWH264Encoding) ||
         webrtc_h264_enabled) {
       codecs->push_back(cricket::WebRtcVideoEncoderFactory::VideoCodec(
