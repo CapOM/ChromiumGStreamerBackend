@@ -35,7 +35,6 @@
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "ipc/ipc_channel_handle.h"
 #include "ipc/ipc_sync_message_filter.h"
-#include "media/base/audio_hardware_config.h"
 #include "media/base/media.h"
 #include "public/web/WebKit.h"
 
@@ -82,7 +81,11 @@ MediaChildThread::MediaChildThread(bool dead_on_arrival,
 
 MediaChildThread::MediaChildThread(const InProcessChildThreadParams& params)
     : ChildThreadImpl(
-          ChildThreadImpl::Options::Builder().InBrowserProcess(params).Build()),
+          ChildThreadImpl::Options::Builder()
+                                .InBrowserProcess(params)
+                                .UseMojoChannel(true)
+                                .ConnectToBrowser(true)
+                                .Build()),
       dead_on_arrival_(false),
       in_browser_process_(true),
       blink_platform_(nullptr) {
@@ -168,7 +171,7 @@ MediaChildThread::CreateSharedContextProvider() {
           gpu_channel_, gpu::GPU_STREAM_DEFAULT, gpu::GpuStreamPriority::NORMAL,
           gpu::kNullSurfaceHandle,
           GURL("chrome://gpu/MediaChildThread::CreateOffscreenContext"),
-          gl::PreferIntegratedGpu, automatic_flushes, support_locking,
+          automatic_flushes, support_locking,
           gpu::SharedMemoryLimits(), attributes, nullptr,
           command_buffer_metrics::MEDIA_GSTREAMER_CONTEXT));
     }
@@ -191,34 +194,26 @@ scoped_refptr<gpu::GpuChannelHost> MediaChildThread::EstablishGpuChannelSync() {
     gpu_channel_ = nullptr;
   }
 
-  if (!IsRunningInMash()) {
-    int client_id = 0;
-    IPC::ChannelHandle channel_handle;
-    gpu::GPUInfo gpu_info;
-    // Ask the browser for the channel name.
-    if (!Send(new ChildProcessHostMsg_EstablishGpuChannel(
-            &client_id, &channel_handle, &gpu_info)) ||
-        !channel_handle.mojo_handle.is_valid()) {
-      // Otherwise cancel the connection.
-      return nullptr;
-    }
-    GetContentClient()->SetGpuInfo(gpu_info);
-
-    // Cache some variables that are needed on the compositor thread for our
-    // implementation of GpuChannelHostFactory.
-    io_thread_task_runner_ = ChildProcess::current()->io_task_runner();
-
-    gpu_channel_ =
-        gpu::GpuChannelHost::Create(this, client_id, gpu_info, channel_handle,
-                                    ChildProcess::current()->GetShutDownEvent(),
-                                    gpu_memory_buffer_manager());
-  } else {
-#if defined(USE_AURA)
-    gpu_channel_ = gpu_service_->EstablishGpuChannelSync();
-#else
-    NOTREACHED();
-#endif
+  int client_id = 0;
+  IPC::ChannelHandle channel_handle;
+  gpu::GPUInfo gpu_info;
+  // Ask the browser for the channel name.
+  if (!Send(new ChildProcessHostMsg_EstablishGpuChannel(
+          &client_id, &channel_handle, &gpu_info)) ||
+      !channel_handle.mojo_handle.is_valid()) {
+    // Otherwise cancel the connection.
+    return nullptr;
   }
+  GetContentClient()->SetGpuInfo(gpu_info);
+
+  // Cache some variables that are needed on the compositor thread for our
+  // implementation of GpuChannelHostFactory.
+  io_thread_task_runner_ = ChildProcess::current()->io_task_runner();
+  gpu_channel_ =
+      gpu::GpuChannelHost::Create(this, client_id, gpu_info, channel_handle,
+                                  ChildProcess::current()->GetShutDownEvent(),
+                                  gpu_memory_buffer_manager());
+
   return gpu_channel_;
 }
 
