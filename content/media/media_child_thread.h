@@ -18,6 +18,8 @@
 #include "content/common/media/media_config.h"
 #include "content/common/media/media_player_channel.h"
 #include "content/common/media/media_player_channel_filter.h"
+#include "content/common/url_loader_factory.mojom.h"
+#include "content/renderer/mojo/blink_interface_provider_impl.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
 
 namespace base {
@@ -69,6 +71,10 @@ class MediaChildThread : public ChildThreadImpl, public gpu::GpuChannelHostFacto
 
   scoped_refptr<cc::ContextProvider> CreateSharedContextProvider();
 
+  mojom::URLLoaderFactory* url_loader_factory() {
+    return url_loader_factory_.get();
+  }
+
  private:
   // GpuChannelHostFactory implementation:
   bool IsMainThread() override;
@@ -114,7 +120,11 @@ class MediaChildThread : public ChildThreadImpl, public gpu::GpuChannelHostFacto
 
   scoped_refptr<cc::ContextProvider> provider_;
 
+  std::unique_ptr<BlinkInterfaceProviderImpl> blink_interface_provider_;
+
   std::unique_ptr<content::BlinkPlatformImpl> blink_platform_;
+
+  mojom::URLLoaderFactoryPtr url_loader_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(MediaChildThread);
 };

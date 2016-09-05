@@ -36,7 +36,9 @@
 #include "ipc/ipc_channel_handle.h"
 #include "ipc/ipc_sync_message_filter.h"
 #include "media/base/media.h"
+#include "mojo/common/common_type_converters.h"
 #include "public/web/WebKit.h"
+#include "services/shell/public/cpp/interface_provider.h"
 
 using base::ThreadRestrictions;
 
@@ -74,8 +76,14 @@ MediaChildThread::MediaChildThread(bool dead_on_arrival,
       dead_on_arrival_(dead_on_arrival),
       deferred_messages_(deferred_messages),
       in_browser_process_(false),
+      blink_interface_provider_(new BlinkInterfaceProviderImpl(
+          GetRemoteInterfaces()->GetWeakPtr())),
       blink_platform_(new content::BlinkPlatformImpl) {
   g_thread_safe_sender.Get() = thread_safe_sender();
+
+  blink::InterfaceProvider* iface_provider = blink_interface_provider_.get();
+  iface_provider->getInterface(mojo::GetProxy(&url_loader_factory_));
+
   blink::initialize(blink_platform_.get());
 }
 

@@ -9,9 +9,11 @@
 
 #include "base/callback.h"
 #include "base/bind.h"
+#include "base/memory/ptr_util.h"
 #include "base/synchronization/waitable_event.h"
 #include "content/child/child_process.h"
-#include "content/child/child_thread_impl.h"
+#include "content/child/web_url_loader_impl.h"
+#include "content/media/media_child_thread.h"
 #include "url/gurl.h"
 
 #define DEFAULT_BLOCKSIZE 4 * 1024
@@ -70,8 +72,6 @@ struct _ChromiumHttpSrcPrivate {
 
   std::mutex mutex_data_source_;
   std::condition_variable condition_data_source_;
-  // Media resource cache, lazily initialized.
-  linked_ptr<media::UrlIndex> url_index_;
   std::unique_ptr<content::GStreamerBufferedDataSource> gst_data_source_;
 };
 
@@ -685,6 +685,9 @@ static void onResetDataSource(GstBaseSrc* basesrc) {
       priv->uri_, src);
   priv->gst_data_source_->data_source()->SetPreload(
       media::MultibufferDataSource::AUTO);
+
+  /*priv->gst_data_source_->data_source()->SetBufferingStrategy(
+      media::MultibufferDataSource::BufferingStrategy::BUFFERING_STRATEGY_AGGRESSIVE);*/
   priv->gst_data_source_->data_source()->Initialize(
       base::Bind(&onSourceInitialized, basesrc));
 
@@ -934,17 +937,28 @@ G_TYPE_INT, (gint) icyMetaInt, NULL));
 namespace content {
 
 GStreamerBufferedDataSource::GStreamerBufferedDataSource(
-    GURL url, linked_ptr<media::UrlIndex> url_index,
-    ChromiumHttpSrc* src)
-    : data_source_(new media::MultibufferDataSource(
-          url,
-          media::UrlData::CORS_UNSPECIFIED,
-          GStreamerBufferedDataSourceFactory::Get()->data_source_task_runner(),
-          url_index,
-          nullptr,
-          GStreamerBufferedDataSourceFactory::Get()->media_log().get(),
-          &buffered_data_source_host_,
-          base::Bind(&onNotifyDownloading, GST_BASE_SRC(src)))) {}
+    GURL url,
+    ChromiumHttpSrc* src) : url_index_(new media::UrlIndex(nullptr)) {
+
+    MediaChildThread* media_child_thread =
+        static_cast<MediaChildThread*>(ChildThreadImpl::current());
+
+    // ResourceMultiBufferDataProvider will take ownership of the loader.
+    url_index_->loader_ = new content::WebURLLoaderImpl(
+        media_child_thread->resource_dispatcher(),
+        media_child_thread->url_loader_factory());
+
+    data_source_ = base::MakeUnique<media::MultibufferDataSource>(
+        url,
+        media::UrlData::CORS_UNSPECIFIED,
+        GStreamerBufferedDataSourceFactory::Get()->data_source_task_runner(),
+        url_index_,
+        nullptr,
+        GStreamerBufferedDataSourceFactory::Get()->media_log().get(),
+        &buffered_data_source_host_,
+        base::Bind(&onNotifyDownloading, GST_BASE_SRC(src)));
+
+}
 
 GStreamerBufferedDataSourceFactory::GStreamerBufferedDataSourceFactory() {}
 
@@ -955,9 +969,10 @@ void GStreamerBufferedDataSourceFactory::create(
     gchar* uri,
     ChromiumHttpSrc* src) {
   ChromiumHttpSrcPrivate* priv = src->priv;
-  priv->url_index_.reset(new media::UrlIndex(nullptr /* frame */));
+
+
   priv->gst_data_source_.reset(
-      new GStreamerBufferedDataSource(GURL(uri), priv->url_index_, src));
+      new GStreamerBufferedDataSource(GURL(uri), src));
 }
 
 void GStreamerBufferedDataSourceFactory::Set(

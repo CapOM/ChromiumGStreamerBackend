@@ -53,13 +53,14 @@ namespace content {
 
 class GStreamerBufferedDataSource {
  public:
-  GStreamerBufferedDataSource(GURL url, linked_ptr<media::UrlIndex> url_index,
+  GStreamerBufferedDataSource(GURL url,
                               ChromiumHttpSrc* src);
   ~GStreamerBufferedDataSource();
 
   media::MultibufferDataSource* data_source() { return data_source_.get(); }
 
  private:
+  linked_ptr<media::UrlIndex> url_index_;
   media::BufferedDataSourceHostImpl buffered_data_source_host_;
   std::unique_ptr<media::MultibufferDataSource> data_source_;
 };
